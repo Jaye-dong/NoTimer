@@ -74,6 +74,66 @@ actor NotionClient {
         }
     }
 
+    /// 查询数据库。自动处理分页，返回所有页；调用方通过 `pageSize` 控制单次请求大小。
+    /// 当 `editedAfter` 非空时使用 `last_edited_time` 过滤，实现增量拉取。
+    func queryDatabase(
+        id: String,
+        editedAfter: Date? = nil,
+        pageSize: Int = 100
+    ) async throws -> [NotionPage] {
+        var cursor: String? = nil
+        var collected: [NotionPage] = []
+
+        repeat {
+            let response = try await queryPage(
+                id: id,
+                cursor: cursor,
+                editedAfter: editedAfter,
+                pageSize: pageSize
+            )
+            collected.append(contentsOf: response.results)
+            cursor = response.hasMore ? response.nextCursor : nil
+        } while cursor != nil
+
+        return collected
+    }
+
+    private func queryPage(
+        id: String,
+        cursor: String?,
+        editedAfter: Date?,
+        pageSize: Int
+    ) async throws -> NotionQueryResponse {
+        var body: [String: Any] = [
+            "page_size": pageSize,
+            "sorts": [[
+                "timestamp": "last_edited_time",
+                "direction": "descending"
+            ]]
+        ]
+        if let cursor {
+            body["start_cursor"] = cursor
+        }
+        if let editedAfter {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime]
+            body["filter"] = [
+                "timestamp": "last_edited_time",
+                "last_edited_time": ["after": iso.string(from: editedAfter)]
+            ]
+        }
+
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let req = try request(method: "POST", path: "/v1/databases/\(id)/query", body: data)
+        let (responseData, response) = try await perform(req)
+        try validate(response: response, data: responseData)
+        do {
+            return try JSONDecoder.notion.decode(NotionQueryResponse.self, from: responseData)
+        } catch {
+            throw NotionError.decoding(error)
+        }
+    }
+
     // MARK: - Internal
 
     private func request(method: String, path: String, body: Data? = nil) throws -> URLRequest {

@@ -17,7 +17,11 @@ struct SettingsView: View {
         }
         .task {
             if viewModel == nil {
-                viewModel = SettingsViewModel(auth: deps.notionAuth, client: deps.notionClient)
+                viewModel = SettingsViewModel(
+                    auth: deps.notionAuth,
+                    client: deps.notionClient,
+                    pull: deps.pullStrategy
+                )
             }
         }
     }
@@ -69,6 +73,23 @@ struct SettingsView: View {
 
             statusSection(state: vm.state)
 
+            Section("数据同步") {
+                Button {
+                    Task { await vm.syncNow() }
+                } label: {
+                    HStack {
+                        Text("立即从 Notion 拉取")
+                        Spacer()
+                        if vm.syncState == .running {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(!vm.canSync)
+
+                syncStatusRow(state: vm.syncState)
+            }
+
             Section("指引") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("1. 创建 Internal Integration 并复制 Secret")
@@ -77,6 +98,37 @@ struct SettingsView: View {
                 }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func syncStatusRow(state: SettingsViewModel.SyncState) -> some View {
+        switch state {
+        case .idle:
+            EmptyView()
+        case .running:
+            Text("正在拉取…")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .success(let timeRecords, let nextActions, let finishedAt):
+            VStack(alignment: .leading, spacing: 4) {
+                Label("拉取成功", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("时间记录 \(timeRecords) 条 · 下一步行动 \(nextActions) 条")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text(finishedAt, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .failure(let msg):
+            VStack(alignment: .leading, spacing: 4) {
+                Label("拉取失败", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Text(msg)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
             }
         }
     }

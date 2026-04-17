@@ -37,4 +37,24 @@ struct NextActionRepository: Sendable {
                 .fetchOne(db)
         }
     }
+
+    func applyPulled(_ action: NextAction, existing: NextAction?) throws {
+        try database.writer.write { db in
+            if let existing {
+                if existing.syncState == .pendingPush || existing.syncState == .conflict {
+                    var marked = existing
+                    marked.syncState = .conflict
+                    marked.localUpdatedAt = Date()
+                    try marked.update(db)
+                    return
+                }
+                var updated = action
+                updated.id = existing.id
+                try updated.update(db)
+            } else {
+                var inserted = action
+                try inserted.insert(db)
+            }
+        }
+    }
 }

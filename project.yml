@@ -1,0 +1,73 @@
+name: NoTimer
+options:
+  bundleIdPrefix: com.jayedong.notimer
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "6.29.0"
+
+targets:
+  NoTimer:
+    type: application
+    platform: iOS
+    sources:
+      - path: NoTimer
+        excludes:
+          - "**/.DS_Store"
+    resources:
+      - NoTimer/Resources/Assets.xcassets
+      - NoTimer/Resources/Preview Content
+    info:
+      path: NoTimer/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: NoTimer
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiredDeviceCapabilities:
+          - arm64
+        NSSupportsLiveActivities: true
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: NoTimer/Resources/NoTimer.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.jayedong.notimer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jayedong.notimer
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_ASSET_PATHS: '"NoTimer/Resources/Preview Content"'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+    dependencies:
+      - package: GRDB
+
+  NoTimerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: NoTimerTests
+    dependencies:
+      - target: NoTimer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jayedong.notimer.tests

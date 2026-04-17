@@ -2,7 +2,7 @@ import Foundation
 
 enum NextActionMapper {
     static func toLocal(page: NotionPage, existing: NextAction?) -> NextAction {
-        let title = page.title(named: NotionFieldNames.NextAction.title) ?? ""
+        let title = page.titleValue
         let status = page.select(named: NotionFieldNames.NextAction.status)?.name
         let projectId = page.relationIds(named: NotionFieldNames.NextAction.projectRelation).first
 

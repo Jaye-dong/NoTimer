@@ -138,6 +138,48 @@ final class NotionMapperTests: XCTestCase {
         XCTAssertEqual(action.projectName, "Cached Project", "缓存的项目名应保留直到显式刷新")
     }
 
+    func testTitleLookupByTypeNotName() throws {
+        // 真实数据库里 title 字段名可能是 "记录" / "Task name" 等而不是 "标题"。
+        // 我们按 type=title 查找，所以名字无所谓。
+        let json = """
+        {
+          "id": "p-1",
+          "last_edited_time": "2026-04-17T08:30:00.000Z",
+          "archived": false,
+          "properties": {
+            "记录": { "id": "t", "type": "title", "title": [{ "plain_text": "写日报" }] },
+            "时间段": {
+              "id": "d", "type": "date",
+              "date": { "start": "2026-04-17T09:00:00.000+08:00", "end": null, "time_zone": null }
+            }
+          }
+        }
+        """
+        let page = try JSONDecoder.notion.decode(NotionPage.self, from: Data(json.utf8))
+        XCTAssertEqual(page.titleValue, "写日报")
+
+        let record = TimeRecordMapper.toLocal(page: page, existing: nil)
+        XCTAssertEqual(record.title, "写日报")
+
+        // 下一步行动同理 — title 字段名可以是 "Task name"
+        let actionJson = """
+        {
+          "id": "a-1",
+          "last_edited_time": "2026-04-17T08:30:00.000Z",
+          "archived": false,
+          "properties": {
+            "Task name": { "id": "t", "type": "title", "title": [{ "plain_text": "修 bug" }] },
+            "Status": { "id": "s", "type": "status", "status": { "id": "s1", "name": "Done", "color": "green" } },
+            "Project": { "id": "p", "type": "relation", "relation": [] }
+          }
+        }
+        """
+        let apage = try JSONDecoder.notion.decode(NotionPage.self, from: Data(actionJson.utf8))
+        let action = NextActionMapper.toLocal(page: apage, existing: nil)
+        XCTAssertEqual(action.title, "修 bug")
+        XCTAssertEqual(action.status, "Done")
+    }
+
     func testQueryResponsePagination() throws {
         let json = """
         {

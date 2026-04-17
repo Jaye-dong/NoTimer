@@ -144,6 +144,17 @@ extension NotionPropertyValue.DateRange: Decodable {
 // MARK: - Convenience accessors
 
 extension NotionPage {
+    /// 返回第一个 type 为 title 的属性值。Notion 每个数据库有且仅有一个 title，
+    /// 但名字会因数据库而异（"标题" / "Name" / "Task name" / "记录" 等），按类型查最稳妥。
+    var titleValue: String {
+        for (_, value) in properties {
+            if case .title(let text) = value {
+                return text
+            }
+        }
+        return ""
+    }
+
     func title(named name: String) -> String? {
         guard case .title(let value) = properties[name] else { return nil }
         return value

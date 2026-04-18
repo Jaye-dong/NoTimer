@@ -47,7 +47,7 @@ struct NextActionsListView: View {
         HStack(spacing: 12) {
             Image(systemName: isActive(action) ? "pause.circle.fill" : "play.circle.fill")
                 .font(.title2)
-                .foregroundStyle(isActive(action) ? .orange : .tint)
+                .foregroundStyle(isActive(action) ? Color.orange : Color.accentColor)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(action.title.isEmpty ? "（无标题）" : action.title)

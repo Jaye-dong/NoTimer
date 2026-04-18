@@ -88,8 +88,11 @@ struct TimeRecordsListView: View {
     private func refresh() async {
         errorMessage = nil
         do {
-            _ = try await deps.pullStrategy.runFullPull()
+            let summary = try await deps.syncEngine.runOnce()
             reload()
+            if let first = summary.push.firstError {
+                errorMessage = "部分推送失败：\(first)"
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

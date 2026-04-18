@@ -20,7 +20,8 @@ struct SettingsView: View {
                 viewModel = SettingsViewModel(
                     auth: deps.notionAuth,
                     client: deps.notionClient,
-                    pull: deps.pullStrategy
+                    syncEngine: deps.syncEngine,
+                    timeRecords: deps.timeRecords
                 )
             }
         }
@@ -78,7 +79,7 @@ struct SettingsView: View {
                     Task { await vm.syncNow() }
                 } label: {
                     HStack {
-                        Text("立即从 Notion 拉取")
+                        Text("立即与 Notion 同步")
                         Spacer()
                         if vm.syncState == .running {
                             ProgressView()
@@ -86,6 +87,17 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(!vm.canSync)
+
+                if vm.pendingPushCount > 0 {
+                    Label("\(vm.pendingPushCount) 条本地修改等待推送", systemImage: "arrow.up.circle")
+                        .foregroundStyle(.orange)
+                        .font(.footnote)
+                }
+                if vm.conflictCount > 0 {
+                    Label("\(vm.conflictCount) 条冲突需要解决", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                        .font(.footnote)
+                }
 
                 syncStatusRow(state: vm.syncState)
             }
@@ -108,23 +120,23 @@ struct SettingsView: View {
         case .idle:
             EmptyView()
         case .running:
-            Text("正在拉取…")
+            Text("正在同步…")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-        case .success(let timeRecords, let nextActions, let finishedAt):
+        case .success(let pushed, let pulled, let pushFailed, let finishedAt):
             VStack(alignment: .leading, spacing: 4) {
-                Label("拉取成功", systemImage: "checkmark.circle.fill")
+                Label("同步完成", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text("时间记录 \(timeRecords) 条 · 下一步行动 \(nextActions) 条")
+                Text("推送 \(pushed) 条 · 拉取 \(pulled) 条" + (pushFailed > 0 ? " · 失败 \(pushFailed) 条" : ""))
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(pushFailed > 0 ? .orange : .secondary)
                 Text(finishedAt, style: .relative)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         case .failure(let msg):
             VStack(alignment: .leading, spacing: 4) {
-                Label("拉取失败", systemImage: "exclamationmark.triangle")
+                Label("同步失败", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
                 Text(msg)
                     .font(.footnote)

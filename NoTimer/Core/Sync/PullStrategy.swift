@@ -83,6 +83,15 @@ actor PullStrategy {
         properties: [String]
     ) async throws {
         let info = try await client.fetchDatabase(id: databaseId)
+
+        // 把 type=title 的属性名缓存下来，push 时需要
+        if let titleName = info.properties.values.first(where: { $0.type == "title" })?.name {
+            switch kind {
+            case .timeRecords: auth.timeRecordsTitleField = titleName
+            case .nextActions: auth.nextActionsTitleField = titleName
+            }
+        }
+
         for property in properties {
             guard let schema = info.properties[property] else { continue }
             let options: [SelectOption]

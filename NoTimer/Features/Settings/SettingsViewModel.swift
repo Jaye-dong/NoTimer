@@ -14,7 +14,7 @@ final class SettingsViewModel {
     enum SyncState: Equatable {
         case idle
         case running
-        case success(timeRecords: Int, nextActions: Int, finishedAt: Date)
+        case success(pushed: Int, pulled: Int, pushFailed: Int, finishedAt: Date)
         case failure(String)
     }
 
@@ -23,20 +23,30 @@ final class SettingsViewModel {
     var nextActionsInput: String = ""
     var state: ValidationState = .idle
     var syncState: SyncState = .idle
+    var conflictCount: Int = 0
+    var pendingPushCount: Int = 0
 
     private let auth: NotionAuth
     private let client: NotionClient
-    private let pull: PullStrategy
+    private let syncEngine: SyncEngine
+    private let timeRecords: TimeRecordRepository
 
-    init(auth: NotionAuth, client: NotionClient, pull: PullStrategy) {
+    init(
+        auth: NotionAuth,
+        client: NotionClient,
+        syncEngine: SyncEngine,
+        timeRecords: TimeRecordRepository
+    ) {
         self.auth = auth
         self.client = client
-        self.pull = pull
+        self.syncEngine = syncEngine
+        self.timeRecords = timeRecords
         self.timeRecordsInput = auth.timeRecordsDatabaseId
         self.nextActionsInput = auth.nextActionsDatabaseId
         if auth.hasToken {
             self.tokenInput = "••••••••••••"
         }
+        refreshCounts()
     }
 
     var canValidate: Bool {
@@ -85,15 +95,22 @@ final class SettingsViewModel {
     func syncNow() async {
         syncState = .running
         do {
-            let summary = try await pull.runFullPull()
+            let summary = try await syncEngine.runOnce()
             syncState = .success(
-                timeRecords: summary.timeRecordsPulled,
-                nextActions: summary.nextActionsPulled,
+                pushed: summary.push.pushed,
+                pulled: summary.pull.timeRecordsPulled + summary.pull.nextActionsPulled,
+                pushFailed: summary.push.failed,
                 finishedAt: Date()
             )
         } catch {
             syncState = .failure(error.localizedDescription)
         }
+        refreshCounts()
+    }
+
+    func refreshCounts() {
+        conflictCount = (try? timeRecords.conflictCount()) ?? 0
+        pendingPushCount = (try? timeRecords.pendingPush().count) ?? 0
     }
 
     func clearToken() {

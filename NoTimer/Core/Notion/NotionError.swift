@@ -4,6 +4,7 @@ enum NotionError: Error, LocalizedError {
     case emptyToken
     case missingToken
     case invalidDatabaseId
+    case missingSchema
     case badResponse(status: Int, body: String)
     case decoding(Error)
     case transport(Error)
@@ -16,6 +17,8 @@ enum NotionError: Error, LocalizedError {
             return "尚未配置 Notion Integration Token"
         case .invalidDatabaseId:
             return "数据库 ID / URL 格式不正确，需要 32 位十六进制"
+        case .missingSchema:
+            return "尚未拉取 Notion 数据库 schema，请先下拉刷新一次"
         case .badResponse(let status, let body):
             return "Notion 接口返回 \(status): \(body)"
         case .decoding(let error):

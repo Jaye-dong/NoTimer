@@ -1,12 +1,17 @@
 import Foundation
 
-/// 轻量 Notion REST 客户端。当前里程碑仅实现鉴权 + 读取数据库元信息 + 查询数据库分页。
-/// 写入 / PATCH 将在 M4 同步引擎中加入。
+/// 轻量 Notion REST 客户端。负责鉴权、schema 读取、数据库查询、page 创建/更新。
+///
+/// 速率控制：Notion 官方建议 3 req/s。这里把客户端包在 actor 里，`perform` 会
+/// 保证相邻请求之间至少 ~350ms 间隔；429 响应按 `Retry-After` 退避，最多重试 3 次。
 actor NotionClient {
     private let auth: NotionAuth
     private let session: URLSession
     private let baseURL = URL(string: "https://api.notion.com")!
     private let apiVersion = "2022-06-28"
+    private let minInterval: TimeInterval = 0.35
+    private let maxRetries = 3
+    private var lastRequestAt: Date?
 
     init(auth: NotionAuth, session: URLSession = .shared) {
         self.auth = auth
@@ -134,6 +139,37 @@ actor NotionClient {
         }
     }
 
+    /// 新建一个 page 到指定数据库。`properties` 必须是已经按 Notion 格式拼好的 JSON 字典。
+    func createPage(databaseId: String, properties: [String: Any]) async throws -> NotionPage {
+        let body: [String: Any] = [
+            "parent": ["database_id": databaseId],
+            "properties": properties
+        ]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let req = try request(method: "POST", path: "/v1/pages", body: data)
+        let (responseData, response) = try await perform(req)
+        try validate(response: response, data: responseData)
+        do {
+            return try JSONDecoder.notion.decode(NotionPage.self, from: responseData)
+        } catch {
+            throw NotionError.decoding(error)
+        }
+    }
+
+    /// 更新已有 page 的 properties。
+    func updatePage(pageId: String, properties: [String: Any]) async throws -> NotionPage {
+        let body: [String: Any] = ["properties": properties]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let req = try request(method: "PATCH", path: "/v1/pages/\(pageId)", body: data)
+        let (responseData, response) = try await perform(req)
+        try validate(response: response, data: responseData)
+        do {
+            return try JSONDecoder.notion.decode(NotionPage.self, from: responseData)
+        } catch {
+            throw NotionError.decoding(error)
+        }
+    }
+
     // MARK: - Internal
 
     private func request(method: String, path: String, body: Data? = nil) throws -> URLRequest {
@@ -151,10 +187,34 @@ actor NotionClient {
     }
 
     private func perform(_ req: URLRequest) async throws -> (Data, URLResponse) {
-        do {
-            return try await session.data(for: req)
-        } catch {
-            throw NotionError.transport(error)
+        var attempt = 0
+        while true {
+            await throttle()
+            let result: (Data, URLResponse)
+            do {
+                result = try await session.data(for: req)
+            } catch {
+                throw NotionError.transport(error)
+            }
+            lastRequestAt = Date()
+
+            if let http = result.1 as? HTTPURLResponse, http.statusCode == 429, attempt < maxRetries {
+                let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
+                    .flatMap(TimeInterval.init) ?? pow(2.0, Double(attempt))
+                try? await Task.sleep(nanoseconds: UInt64(retryAfter * 1_000_000_000))
+                attempt += 1
+                continue
+            }
+            return result
+        }
+    }
+
+    private func throttle() async {
+        guard let last = lastRequestAt else { return }
+        let elapsed = Date().timeIntervalSince(last)
+        if elapsed < minInterval {
+            let wait = minInterval - elapsed
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
         }
     }
 

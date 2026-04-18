@@ -11,6 +11,8 @@ final class AppDependencies {
     let nextActions: NextActionRepository
     let selectOptions: SelectOptionRepository
     let pullStrategy: PullStrategy
+    let pushQueue: PushQueue
+    let syncEngine: SyncEngine
     let timerController: TimerController
 
     init(
@@ -22,6 +24,8 @@ final class AppDependencies {
         nextActions: NextActionRepository,
         selectOptions: SelectOptionRepository,
         pullStrategy: PullStrategy,
+        pushQueue: PushQueue,
+        syncEngine: SyncEngine,
         timerController: TimerController
     ) {
         self.database = database
@@ -32,6 +36,8 @@ final class AppDependencies {
         self.nextActions = nextActions
         self.selectOptions = selectOptions
         self.pullStrategy = pullStrategy
+        self.pushQueue = pushQueue
+        self.syncEngine = syncEngine
         self.timerController = timerController
     }
 
@@ -52,11 +58,20 @@ final class AppDependencies {
                 nextActions: nextActions,
                 selectOptions: selectOptions
             )
+            let push = PushQueue(
+                client: client,
+                auth: auth,
+                timeRecords: timeRecords
+            )
+            let sync = SyncEngine(pull: pull, push: push)
             let liveActivity = LiveActivityManager()
             let timer = TimerController(
                 database: database,
                 timeRecords: timeRecords,
-                liveActivity: liveActivity
+                liveActivity: liveActivity,
+                onStop: { [sync] in
+                    Task { await sync.pushOnly() }
+                }
             )
             timer.restore()
             return AppDependencies(
@@ -68,6 +83,8 @@ final class AppDependencies {
                 nextActions: nextActions,
                 selectOptions: selectOptions,
                 pullStrategy: pull,
+                pushQueue: push,
+                syncEngine: sync,
                 timerController: timer
             )
         } catch {

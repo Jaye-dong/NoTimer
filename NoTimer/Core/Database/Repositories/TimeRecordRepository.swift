@@ -46,6 +46,26 @@ struct TimeRecordRepository: Sendable {
         }
     }
 
+    func conflictCount() throws -> Int {
+        try database.writer.read { db in
+            try TimeRecord
+                .filter(TimeRecord.Columns.syncState == SyncState.conflict.rawValue)
+                .fetchCount(db)
+        }
+    }
+
+    /// Push 成功：写回 Notion 返回的 pageId / lastEdited，置回 synced。
+    /// 故意绕开 `update(_:)` — 那个会自动把 synced 翻回 pendingPush。
+    func applyPushed(_ recordId: String, notionPageId: String, notionLastEdited: Date) throws {
+        try database.writer.write { db in
+            guard var record = try TimeRecord.fetchOne(db, key: recordId) else { return }
+            record.notionPageId = notionPageId
+            record.notionLastEdited = notionLastEdited
+            record.syncState = .synced
+            try record.update(db)
+        }
+    }
+
     func byPageId(_ pageId: String) throws -> TimeRecord? {
         try database.writer.read { db in
             try TimeRecord

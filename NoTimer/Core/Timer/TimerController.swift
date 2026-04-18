@@ -15,15 +15,19 @@ final class TimerController {
     private let database: AppDatabase
     private let timeRecords: TimeRecordRepository
     private let liveActivity: LiveActivityManager?
+    /// 计时停止后（stop 或 start 覆盖前一个）触发，用于让 SyncEngine fire-and-forget 推一次。
+    private let onStop: (@Sendable () -> Void)?
 
     init(
         database: AppDatabase,
         timeRecords: TimeRecordRepository,
-        liveActivity: LiveActivityManager? = nil
+        liveActivity: LiveActivityManager? = nil,
+        onStop: (@Sendable () -> Void)? = nil
     ) {
         self.database = database
         self.timeRecords = timeRecords
         self.liveActivity = liveActivity
+        self.onStop = onStop
     }
 
     /// 读取 `active_timer` 单例恢复 UI 状态。app 启动时调用一次。
@@ -107,6 +111,7 @@ final class TimerController {
 
         self.current = nil
         endLiveActivity()
+        onStop?()
     }
 
     /// 放弃当前计时（不保留记录）。

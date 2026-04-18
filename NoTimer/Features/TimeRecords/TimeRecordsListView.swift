@@ -36,6 +36,9 @@ struct TimeRecordsListView: View {
             }
         }
         .task { reload() }
+        .onChange(of: deps.timerController.current?.timeRecordId) { _, _ in
+            reload()
+        }
     }
 
     private var list: some View {

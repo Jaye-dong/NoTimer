@@ -11,6 +11,7 @@ final class AppDependencies {
     let nextActions: NextActionRepository
     let selectOptions: SelectOptionRepository
     let pullStrategy: PullStrategy
+    let timerController: TimerController
 
     init(
         database: AppDatabase,
@@ -20,7 +21,8 @@ final class AppDependencies {
         timeRecords: TimeRecordRepository,
         nextActions: NextActionRepository,
         selectOptions: SelectOptionRepository,
-        pullStrategy: PullStrategy
+        pullStrategy: PullStrategy,
+        timerController: TimerController
     ) {
         self.database = database
         self.keychain = keychain
@@ -30,6 +32,7 @@ final class AppDependencies {
         self.nextActions = nextActions
         self.selectOptions = selectOptions
         self.pullStrategy = pullStrategy
+        self.timerController = timerController
     }
 
     static func bootstrap() -> AppDependencies {
@@ -48,6 +51,8 @@ final class AppDependencies {
                 nextActions: nextActions,
                 selectOptions: selectOptions
             )
+            let timer = TimerController(database: database, timeRecords: timeRecords)
+            timer.restore()
             return AppDependencies(
                 database: database,
                 keychain: keychain,
@@ -56,7 +61,8 @@ final class AppDependencies {
                 timeRecords: timeRecords,
                 nextActions: nextActions,
                 selectOptions: selectOptions,
-                pullStrategy: pull
+                pullStrategy: pull,
+                timerController: timer
             )
         } catch {
             fatalError("Failed to bootstrap app: \(error)")

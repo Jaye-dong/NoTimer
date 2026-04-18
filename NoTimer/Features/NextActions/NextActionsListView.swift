@@ -4,8 +4,8 @@ struct NextActionsListView: View {
     @Environment(AppDependencies.self) private var deps
     @State private var actions: [NextAction] = []
     @State private var query: String = ""
-    @State private var isRefreshing = false
     @State private var errorMessage: String?
+    @State private var startedJustNow: String?
 
     var body: some View {
         NavigationStack {
@@ -25,25 +25,36 @@ struct NextActionsListView: View {
             .navigationTitle("下一步行动")
             .searchable(text: $query, prompt: "搜索标题")
             .refreshable { await refresh() }
-            .overlay(alignment: .bottom) {
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(8)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        .padding()
-                }
-            }
+            .overlay(alignment: .bottom) { overlayMessage }
         }
         .task { reload() }
     }
 
     private var list: some View {
         List(filtered) { action in
+            Button {
+                start(action: action)
+            } label: {
+                row(action)
+            }
+            .buttonStyle(.plain)
+            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        }
+        .listStyle(.plain)
+    }
+
+    private func row(_ action: NextAction) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: isActive(action) ? "pause.circle.fill" : "play.circle.fill")
+                .font(.title2)
+                .foregroundStyle(isActive(action) ? .orange : .tint)
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(action.title)
+                Text(action.title.isEmpty ? "（无标题）" : action.title)
                     .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
                 HStack(spacing: 8) {
                     if let status = action.status, !status.isEmpty {
                         Text(status)
@@ -63,6 +74,50 @@ struct NextActionsListView: View {
                     }
                 }
             }
+            Spacer()
+        }
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var overlayMessage: some View {
+        if let startedJustNow {
+            Label("已开始：\(startedJustNow)", systemImage: "timer")
+                .font(.footnote)
+                .padding(10)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .padding()
+                .transition(.opacity)
+        } else if let errorMessage {
+            Text(errorMessage)
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .padding(8)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .padding()
+        }
+    }
+
+    private func isActive(_ action: NextAction) -> Bool {
+        guard let current = deps.timerController.current,
+              let pageId = action.notionPageId else { return false }
+        return current.nextActionPageId == pageId
+    }
+
+    private func start(action: NextAction) {
+        do {
+            try deps.timerController.start(
+                title: action.title,
+                nextActionPageId: action.notionPageId
+            )
+            errorMessage = nil
+            startedJustNow = action.title
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                await MainActor.run { startedJustNow = nil }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

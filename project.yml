@@ -28,6 +28,8 @@ targets:
       - path: NoTimer
         excludes:
           - "**/.DS_Store"
+          - "Resources/Info.plist"
+          - "Resources/NoTimer.entitlements"
     resources:
       - NoTimer/Resources/Assets.xcassets
       - NoTimer/Resources/Preview Content
@@ -60,6 +62,40 @@ targets:
         ENABLE_PREVIEWS: YES
     dependencies:
       - package: GRDB
+      - target: NoTimerWidget
+        embed: true
+
+  NoTimerWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NoTimerWidget
+        excludes:
+          - Info.plist
+          - NoTimerWidget.entitlements
+      - path: NoTimer/Shared/TimerAttributes.swift
+    info:
+      path: NoTimerWidget/Info.plist
+      properties:
+        CFBundleDisplayName: NoTimer Widget
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: NoTimerWidget/NoTimerWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.jayedong.notimer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jayedong.notimer.widget
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
 
   NoTimerTests:
     type: bundle.unit-test

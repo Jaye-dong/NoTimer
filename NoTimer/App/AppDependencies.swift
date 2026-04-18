@@ -35,6 +35,7 @@ final class AppDependencies {
         self.timerController = timerController
     }
 
+    @MainActor
     static func bootstrap() -> AppDependencies {
         do {
             let database = try AppDatabase.onDisk()
@@ -51,7 +52,12 @@ final class AppDependencies {
                 nextActions: nextActions,
                 selectOptions: selectOptions
             )
-            let timer = TimerController(database: database, timeRecords: timeRecords)
+            let liveActivity = LiveActivityManager()
+            let timer = TimerController(
+                database: database,
+                timeRecords: timeRecords,
+                liveActivity: liveActivity
+            )
             timer.restore()
             return AppDependencies(
                 database: database,

@@ -48,12 +48,17 @@ final class StatsViewModel {
     private(set) var categoryTotals: [CategorySummary] = []
     private(set) var buckets: [Bucket] = []
     private(set) var interval: DateInterval = DateInterval(start: Date(), end: Date())
+    /// 分类名 → Notion 侧 color token（"blue"/"purple"/"yellow"/...）。来自缓存的 select_options。
+    /// 本地兜底名（「未分类」）不会出现在这里，由调用方自行兜底。
+    private(set) var categoryColorTokens: [String: String] = [:]
 
     private let timeRecords: TimeRecordRepository
+    private let selectOptions: SelectOptionRepository?
     private let unknownCategory = "未分类"
 
-    init(timeRecords: TimeRecordRepository) {
+    init(timeRecords: TimeRecordRepository, selectOptions: SelectOptionRepository? = nil) {
         self.timeRecords = timeRecords
+        self.selectOptions = selectOptions
     }
 
     var canStepForward: Bool { offset < 0 }
@@ -110,6 +115,18 @@ final class StatsViewModel {
             records: recordsInRange,
             unknownCategory: unknownCategory
         )
+
+        if let selectOptions {
+            let opts = (try? selectOptions.options(
+                kind: .timeRecords,
+                property: NotionFieldNames.TimeRecord.category
+            )) ?? []
+            categoryColorTokens = Dictionary(
+                uniqueKeysWithValues: opts.compactMap { opt in
+                    opt.color.map { (opt.name, $0) }
+                }
+            )
+        }
     }
 
     var bucketUnit: Calendar.Component {

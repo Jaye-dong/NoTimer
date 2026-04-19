@@ -18,7 +18,10 @@ struct StatsView: View {
         }
         .task {
             if viewModel == nil {
-                let vm = StatsViewModel(timeRecords: deps.timeRecords)
+                let vm = StatsViewModel(
+                    timeRecords: deps.timeRecords,
+                    selectOptions: deps.selectOptions
+                )
                 vm.reload()
                 viewModel = vm
             }
@@ -254,25 +257,54 @@ struct StatsView: View {
     }
 
     private func palette(for vm: StatsViewModel) -> CategoryPalette {
-        CategoryPalette(names: vm.categoryTotals.map(\.name))
+        CategoryPalette(
+            names: vm.categoryTotals.map(\.name),
+            notionColorTokens: vm.categoryColorTokens
+        )
     }
 }
 
-/// 把分类名按稳定顺序映射到一组颜色，柱状图/饼图/列表共用同一份色板，确保同一分类色一致。
+/// 把分类名映射到颜色。优先用 Notion 缓存里的 color token（和 Notion 网页上显示的色保持一致），
+/// 未命中的（例如本地兜底「未分类」）按稳定顺序分配默认色。柱状图/饼图/列表共用同一份色板。
 struct CategoryPalette {
-    static let colors: [Color] = [
-        .blue, .orange, .green, .purple, .pink,
-        .teal, .yellow, .red, .mint, .indigo
+    /// Notion select option 的 color token → SwiftUI Color。Notion 页面上这几个 token
+    /// 渲染成浅色 tag，我们在图表里用更饱和的同色系，视觉一致但更可读。
+    static func color(forNotionToken token: String) -> Color {
+        switch token {
+        case "blue":    return .blue
+        case "purple":  return .purple
+        case "pink":    return .pink
+        case "red":     return .red
+        case "orange":  return .orange
+        case "yellow":  return .yellow
+        case "green":   return .green
+        case "brown":   return .brown
+        case "gray":    return .gray
+        case "default": return .gray
+        default:        return .gray
+        }
+    }
+
+    /// 截图里用户给的配色，作为没匹配到 Notion token 时的兜底序列。
+    static let fallback: [Color] = [
+        .gray, .blue, .purple, .yellow, .pink,
+        .orange, .green, .brown, .red, .mint
     ]
 
     let domain: [String]
     let range: [Color]
     private let map: [String: Color]
 
-    init(names: [String]) {
+    init(names: [String], notionColorTokens: [String: String] = [:]) {
         self.domain = names
-        let mapped = names.enumerated().map { idx, name in
-            (name, Self.colors[idx % Self.colors.count])
+        var fallbackIdx = 0
+        let mapped: [(String, Color)] = names.map { name in
+            if let token = notionColorTokens[name] {
+                return (name, Self.color(forNotionToken: token))
+            }
+            let c = Self.fallback[fallbackIdx % Self.fallback.count]
+            fallbackIdx += 1
+            return (name, c)
         }
         self.range = mapped.map(\.1)
         self.map = Dictionary(uniqueKeysWithValues: mapped)

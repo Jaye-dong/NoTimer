@@ -46,8 +46,10 @@ struct StatsView: View {
                 summary(vm)
 
                 if vm.totalHours > 0 {
-                    stackedChart(vm)
-                    categoryList(vm)
+                    let p = palette(for: vm)
+                    stackedChart(vm, palette: p)
+                    pieChart(vm, palette: p)
+                    categoryList(vm, palette: p)
                 } else {
                     ContentUnavailableView(
                         "这个时间段还没有记录",
@@ -125,7 +127,7 @@ struct StatsView: View {
         }
     }
 
-    private func stackedChart(_ vm: StatsViewModel) -> some View {
+    private func stackedChart(_ vm: StatsViewModel, palette: CategoryPalette) -> some View {
         Chart {
             ForEach(vm.buckets) { bucket in
                 ForEach(bucket.slices) { slice in
@@ -137,10 +139,33 @@ struct StatsView: View {
                 }
             }
         }
+        .chartForegroundStyleScale(domain: palette.domain, range: palette.range)
         .chartXAxis { xAxis(for: vm.range) }
         .chartLegend(position: .bottom, alignment: .leading)
         .frame(height: 220)
         .padding(.horizontal)
+    }
+
+    private func pieChart(_ vm: StatsViewModel, palette: CategoryPalette) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("占比")
+                .font(.headline)
+                .padding(.horizontal)
+
+            Chart(vm.categoryTotals) { row in
+                SectorMark(
+                    angle: .value("小时", row.hours),
+                    innerRadius: .ratio(0.55),
+                    angularInset: 1.5
+                )
+                .cornerRadius(4)
+                .foregroundStyle(by: .value("分类", row.name))
+            }
+            .chartForegroundStyleScale(domain: palette.domain, range: palette.range)
+            .chartLegend(position: .bottom, alignment: .leading)
+            .frame(height: 240)
+            .padding(.horizontal)
+        }
     }
 
     @AxisContentBuilder
@@ -164,7 +189,7 @@ struct StatsView: View {
         }
     }
 
-    private func categoryList(_ vm: StatsViewModel) -> some View {
+    private func categoryList(_ vm: StatsViewModel, palette: CategoryPalette) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("按分类")
                 .font(.headline)
@@ -174,7 +199,7 @@ struct StatsView: View {
                 ForEach(vm.categoryTotals) { row in
                     HStack {
                         Circle()
-                            .fill(Color.accentColor.opacity(colorOpacity(for: row, in: vm)))
+                            .fill(palette.color(for: row.name))
                             .frame(width: 10, height: 10)
                         Text(row.name)
                         Spacer()
@@ -228,10 +253,33 @@ struct StatsView: View {
         return "\(pct)%"
     }
 
-    private func colorOpacity(for row: StatsViewModel.CategorySummary, in vm: StatsViewModel) -> Double {
-        // 简单的分类深浅区分 — 排名越靠前越深。Chart 自己会用独立色板，这里只是列表点。
-        guard let idx = vm.categoryTotals.firstIndex(where: { $0.id == row.id }) else { return 1 }
-        return 1.0 - min(Double(idx) * 0.15, 0.6)
+    private func palette(for vm: StatsViewModel) -> CategoryPalette {
+        CategoryPalette(names: vm.categoryTotals.map(\.name))
+    }
+}
+
+/// 把分类名按稳定顺序映射到一组颜色，柱状图/饼图/列表共用同一份色板，确保同一分类色一致。
+struct CategoryPalette {
+    static let colors: [Color] = [
+        .blue, .orange, .green, .purple, .pink,
+        .teal, .yellow, .red, .mint, .indigo
+    ]
+
+    let domain: [String]
+    let range: [Color]
+    private let map: [String: Color]
+
+    init(names: [String]) {
+        self.domain = names
+        let mapped = names.enumerated().map { idx, name in
+            (name, Self.colors[idx % Self.colors.count])
+        }
+        self.range = mapped.map(\.1)
+        self.map = Dictionary(uniqueKeysWithValues: mapped)
+    }
+
+    func color(for name: String) -> Color {
+        map[name] ?? .gray
     }
 }
 

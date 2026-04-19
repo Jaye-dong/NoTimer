@@ -73,8 +73,8 @@ struct CurrentTimerWidgetView: View {
             Text(timerInterval: snapshot.startedAt...Date.distantFuture,
                  countsDown: false,
                  showsHours: true)
-                .font((family == .systemMedium ? .system(size: 32) : .system(size: 24))
-                      .weight(.medium))
+                .font(Font.system(size: family == .systemMedium ? 32 : 24,
+                                  weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(.tint)
 

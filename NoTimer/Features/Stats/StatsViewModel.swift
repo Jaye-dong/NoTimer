@@ -35,8 +35,15 @@ final class StatsViewModel {
     }
 
     var range: Range = .day {
-        didSet { if range != oldValue { reload() } }
+        didSet {
+            if range != oldValue {
+                offset = 0
+                reload()
+            }
+        }
     }
+    /// 相对当前时段的偏移：0=本期，-1=上期，1=下期（0 时右箭头禁用）
+    private(set) var offset: Int = 0
     private(set) var totalHours: Double = 0
     private(set) var categoryTotals: [CategorySummary] = []
     private(set) var buckets: [Bucket] = []
@@ -49,9 +56,28 @@ final class StatsViewModel {
         self.timeRecords = timeRecords
     }
 
+    var canStepForward: Bool { offset < 0 }
+
+    func stepBackward() {
+        offset -= 1
+        reload()
+    }
+
+    func stepForward() {
+        guard canStepForward else { return }
+        offset += 1
+        reload()
+    }
+
+    func resetToCurrent() {
+        guard offset != 0 else { return }
+        offset = 0
+        reload()
+    }
+
     func reload(now: Date = Date()) {
         let calendar = Calendar.current
-        interval = Self.interval(for: range, now: now, calendar: calendar)
+        interval = Self.interval(for: range, offset: offset, now: now, calendar: calendar)
 
         let recordsInRange: [TimeRecord]
         do {
@@ -92,20 +118,23 @@ final class StatsViewModel {
 
     // MARK: - Static helpers (pure, testable)
 
-    static func interval(for range: Range, now: Date, calendar: Calendar) -> DateInterval {
+    static func interval(for range: Range, offset: Int, now: Date, calendar: Calendar) -> DateInterval {
         switch range {
         case .day:
-            let start = calendar.startOfDay(for: now)
+            let today = calendar.startOfDay(for: now)
+            let start = calendar.date(byAdding: .day, value: offset, to: today)!
             let end = calendar.date(byAdding: .day, value: 1, to: start)!
             return DateInterval(start: start, end: end)
         case .week:
-            let start = calendar.dateInterval(of: .weekOfYear, for: now)?.start
+            let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start
                 ?? calendar.startOfDay(for: now)
+            let start = calendar.date(byAdding: .weekOfYear, value: offset, to: thisWeekStart)!
             let end = calendar.date(byAdding: .day, value: 7, to: start)!
             return DateInterval(start: start, end: end)
         case .month:
-            let start = calendar.dateInterval(of: .month, for: now)?.start
+            let thisMonthStart = calendar.dateInterval(of: .month, for: now)?.start
                 ?? calendar.startOfDay(for: now)
+            let start = calendar.date(byAdding: .month, value: offset, to: thisMonthStart)!
             let end = calendar.date(byAdding: .month, value: 1, to: start)!
             return DateInterval(start: start, end: end)
         }

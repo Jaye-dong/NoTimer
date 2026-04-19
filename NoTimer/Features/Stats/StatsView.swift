@@ -42,6 +42,7 @@ struct StatsView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
+                stepper(vm)
                 summary(vm)
 
                 if vm.totalHours > 0 {
@@ -61,9 +62,51 @@ struct StatsView: View {
         .refreshable { vm.reload() }
     }
 
+    private func stepper(_ vm: StatsViewModel) -> some View {
+        HStack {
+            Button {
+                vm.stepBackward()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 32)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("上一\(vm.range.label)")
+
+            Spacer()
+
+            Button {
+                vm.resetToCurrent()
+            } label: {
+                Text(rangeTitle(vm))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .buttonStyle(.plain)
+            .disabled(vm.offset == 0)
+
+            Spacer()
+
+            Button {
+                vm.stepForward()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 32)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!vm.canStepForward)
+            .accessibilityLabel("下一\(vm.range.label)")
+        }
+        .padding(.horizontal)
+    }
+
     private func summary(_ vm: StatsViewModel) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(rangeTitle(vm))
+            Text(offsetLabel(vm))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(formatHours(vm.totalHours))
@@ -72,6 +115,14 @@ struct StatsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
+    }
+
+    private func offsetLabel(_ vm: StatsViewModel) -> String {
+        switch vm.offset {
+        case 0:   return "本\(vm.range.label)"
+        case -1:  return "上\(vm.range.label)"
+        case let n: return "\(-n) \(vm.range.label)前"
+        }
     }
 
     private func stackedChart(_ vm: StatsViewModel) -> some View {

@@ -32,6 +32,20 @@ struct TimeRecordRepository: Sendable {
         }
     }
 
+    /// 取与 [start, end) 有交集、已结束的记录。供统计页按日期段查询，避免把全量记录读进内存。
+    /// 交集条件：endAt >= start AND startAt < end。
+    func completed(overlapping start: Date, and end: Date) throws -> [TimeRecord] {
+        try database.writer.read { db in
+            try TimeRecord
+                .filter(TimeRecord.Columns.syncState != SyncState.tombstone.rawValue)
+                .filter(TimeRecord.Columns.endAt != nil)
+                .filter(TimeRecord.Columns.endAt >= start)
+                .filter(TimeRecord.Columns.startAt < end)
+                .order(TimeRecord.Columns.startAt.asc)
+                .fetchAll(db)
+        }
+    }
+
     func activeTimer() throws -> ActiveTimer? {
         try database.writer.read { db in
             try ActiveTimer.fetchOne(db, key: ActiveTimer.singletonId)

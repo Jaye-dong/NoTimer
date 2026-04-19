@@ -267,28 +267,37 @@ struct StatsView: View {
 /// 把分类名映射到颜色。优先用 Notion 缓存里的 color token（和 Notion 网页上显示的色保持一致），
 /// 未命中的（例如本地兜底「未分类」）按稳定顺序分配默认色。柱状图/饼图/列表共用同一份色板。
 struct CategoryPalette {
-    /// Notion select option 的 color token → SwiftUI Color。Notion 页面上这几个 token
-    /// 渲染成浅色 tag，我们在图表里用更饱和的同色系，视觉一致但更可读。
+    /// Notion select option 的 color token → SwiftUI Color。
+    /// 这里用 Notion 网页上 tag 的浅色背景作为参考（马卡龙/pastel 风），
+    /// 和 Notion 看起来保持一致。
     static func color(forNotionToken token: String) -> Color {
         switch token {
-        case "blue":    return .blue
-        case "purple":  return .purple
-        case "pink":    return .pink
-        case "red":     return .red
-        case "orange":  return .orange
-        case "yellow":  return .yellow
-        case "green":   return .green
-        case "brown":   return .brown
-        case "gray":    return .gray
-        case "default": return .gray
-        default:        return .gray
+        case "blue":    return Color(red: 0x82/255, green: 0xB5/255, blue: 0xD2/255)
+        case "purple":  return Color(red: 0xC0/255, green: 0xA3/255, blue: 0xD4/255)
+        case "pink":    return Color(red: 0xE7/255, green: 0xB4/255, blue: 0xCC/255)
+        case "red":     return Color(red: 0xF2/255, green: 0xAE/255, blue: 0xA5/255)
+        case "orange":  return Color(red: 0xF2/255, green: 0xC1/255, blue: 0x8C/255)
+        case "yellow":  return Color(red: 0xF2/255, green: 0xD8/255, blue: 0x8F/255)
+        case "green":   return Color(red: 0xA2/255, green: 0xCE/255, blue: 0xA2/255)
+        case "brown":   return Color(red: 0xC6/255, green: 0xAA/255, blue: 0x92/255)
+        case "gray":    return Color(red: 0xC6/255, green: 0xC4/255, blue: 0xC0/255)
+        case "default": return Color(red: 0xD2/255, green: 0xD1/255, blue: 0xCD/255)
+        default:        return Color(red: 0xC6/255, green: 0xC4/255, blue: 0xC0/255)
         }
     }
 
-    /// 截图里用户给的配色，作为没匹配到 Notion token 时的兜底序列。
+    /// 没匹配到 Notion token 时的兜底序列（同一套 pastel，顺序参考用户 Notion 分类截图）。
     static let fallback: [Color] = [
-        .gray, .blue, .purple, .yellow, .pink,
-        .orange, .green, .brown, .red, .mint
+        color(forNotionToken: "gray"),
+        color(forNotionToken: "blue"),
+        color(forNotionToken: "purple"),
+        color(forNotionToken: "yellow"),
+        color(forNotionToken: "pink"),
+        color(forNotionToken: "orange"),
+        color(forNotionToken: "green"),
+        color(forNotionToken: "brown"),
+        color(forNotionToken: "red"),
+        color(forNotionToken: "default")
     ]
 
     let domain: [String]

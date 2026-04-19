@@ -86,11 +86,10 @@ final class StatsViewModel {
 
         let recordsInRange: [TimeRecord]
         do {
-            recordsInRange = try timeRecords.recent(limit: 2000)
-                .filter { record in
-                    guard let end = record.endAt else { return false }
-                    return end >= interval.start && record.startAt < interval.end
-                }
+            recordsInRange = try timeRecords.completed(
+                overlapping: interval.start,
+                and: interval.end
+            )
         } catch {
             recordsInRange = []
         }

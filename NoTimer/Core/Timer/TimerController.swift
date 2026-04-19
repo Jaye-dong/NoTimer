@@ -1,13 +1,14 @@
 import Foundation
 import GRDB
 import Observation
+import WidgetKit
 
 /// 计时器单例状态机。一次只允许一个活跃计时，开启新的会自动停止当前的。
 ///
 /// 设计要点：
 /// - UI 直接观察 `current` 属性即可（@Observable）
 /// - 所有 DB 写入都用同步 GRDB 调用，保证 start/stop 返回时已落盘
-/// - Live Activity 的启停跟随 start/stop 同步触发
+/// - Live Activity / Widget snapshot / 长时间提醒都跟随 start/stop 同步触发
 @Observable
 final class TimerController {
     private(set) var current: ActiveTimer?
@@ -15,6 +16,7 @@ final class TimerController {
     private let database: AppDatabase
     private let timeRecords: TimeRecordRepository
     private let liveActivity: LiveActivityManager?
+    private let notifications: TimerNotifications?
     /// 计时停止后（stop 或 start 覆盖前一个）触发，用于让 SyncEngine fire-and-forget 推一次。
     private let onStop: (@Sendable () -> Void)?
 
@@ -22,29 +24,37 @@ final class TimerController {
         database: AppDatabase,
         timeRecords: TimeRecordRepository,
         liveActivity: LiveActivityManager? = nil,
+        notifications: TimerNotifications? = nil,
         onStop: (@Sendable () -> Void)? = nil
     ) {
         self.database = database
         self.timeRecords = timeRecords
         self.liveActivity = liveActivity
+        self.notifications = notifications
         self.onStop = onStop
     }
 
     /// 读取 `active_timer` 单例恢复 UI 状态。app 启动时调用一次。
     func restore() {
         current = try? timeRecords.activeTimer()
-        if let current, let liveActivity {
-            // 恢复 Live Activity — 如果系统已经杀掉就重建，否则 ActivityKit 会复用
-            let snapshot = current
-            Task { @MainActor in
-                liveActivity.start(
-                    title: snapshot.title,
-                    startedAt: snapshot.startedAt,
-                    nextActionPageId: snapshot.nextActionPageId,
-                    timerId: snapshot.timeRecordId
-                )
+        if let current {
+            writeSnapshot(current)
+            if let liveActivity {
+                // 恢复 Live Activity — 如果系统已经杀掉就重建，否则 ActivityKit 会复用
+                let snapshot = current
+                Task { @MainActor in
+                    liveActivity.start(
+                        title: snapshot.title,
+                        startedAt: snapshot.startedAt,
+                        nextActionPageId: snapshot.nextActionPageId,
+                        timerId: snapshot.timeRecordId
+                    )
+                }
             }
+        } else {
+            SharedTimerStore.clear()
         }
+        reloadWidgets()
     }
 
     /// 开始新的计时。如果已有活跃计时，先停止它。
@@ -76,6 +86,9 @@ final class TimerController {
         }
 
         current = active
+        writeSnapshot(active)
+        reloadWidgets()
+        notifications?.scheduleLongRunningReminder(title: title, startedAt: now)
 
         if let liveActivity {
             let capturedTitle = title
@@ -110,6 +123,9 @@ final class TimerController {
         }
 
         self.current = nil
+        SharedTimerStore.clear()
+        reloadWidgets()
+        notifications?.cancelLongRunningReminder()
         endLiveActivity()
         onStop?()
     }
@@ -122,7 +138,23 @@ final class TimerController {
             _ = try ActiveTimer.deleteOne(db, key: ActiveTimer.singletonId)
         }
         self.current = nil
+        SharedTimerStore.clear()
+        reloadWidgets()
+        notifications?.cancelLongRunningReminder()
         endLiveActivity()
+    }
+
+    private func writeSnapshot(_ active: ActiveTimer) {
+        SharedTimerStore.write(SharedTimerSnapshot(
+            timeRecordId: active.timeRecordId,
+            title: active.title,
+            startedAt: active.startedAt,
+            nextActionPageId: active.nextActionPageId
+        ))
+    }
+
+    private func reloadWidgets() {
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func endLiveActivity() {

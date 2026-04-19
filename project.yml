@@ -74,6 +74,7 @@ targets:
           - Info.plist
           - NoTimerWidget.entitlements
       - path: NoTimer/Shared/TimerAttributes.swift
+      - path: NoTimer/Shared/SharedTimerStore.swift
     info:
       path: NoTimerWidget/Info.plist
       properties:

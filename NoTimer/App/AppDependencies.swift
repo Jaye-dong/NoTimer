@@ -14,6 +14,8 @@ final class AppDependencies {
     let pushQueue: PushQueue
     let syncEngine: SyncEngine
     let timerController: TimerController
+    let notifications: TimerNotifications
+    let backgroundSync: BackgroundSyncScheduler
 
     init(
         database: AppDatabase,
@@ -26,7 +28,9 @@ final class AppDependencies {
         pullStrategy: PullStrategy,
         pushQueue: PushQueue,
         syncEngine: SyncEngine,
-        timerController: TimerController
+        timerController: TimerController,
+        notifications: TimerNotifications,
+        backgroundSync: BackgroundSyncScheduler
     ) {
         self.database = database
         self.keychain = keychain
@@ -39,6 +43,8 @@ final class AppDependencies {
         self.pushQueue = pushQueue
         self.syncEngine = syncEngine
         self.timerController = timerController
+        self.notifications = notifications
+        self.backgroundSync = backgroundSync
     }
 
     @MainActor
@@ -65,15 +71,18 @@ final class AppDependencies {
             )
             let sync = SyncEngine(pull: pull, push: push)
             let liveActivity = LiveActivityManager()
+            let notifications = TimerNotifications()
             let timer = TimerController(
                 database: database,
                 timeRecords: timeRecords,
                 liveActivity: liveActivity,
+                notifications: notifications,
                 onStop: { [sync] in
                     Task { await sync.pushOnly() }
                 }
             )
             timer.restore()
+            let backgroundSync = BackgroundSyncScheduler(syncEngine: sync)
             return AppDependencies(
                 database: database,
                 keychain: keychain,
@@ -85,7 +94,9 @@ final class AppDependencies {
                 pullStrategy: pull,
                 pushQueue: push,
                 syncEngine: sync,
-                timerController: timer
+                timerController: timer,
+                notifications: notifications,
+                backgroundSync: backgroundSync
             )
         } catch {
             fatalError("Failed to bootstrap app: \(error)")

@@ -13,6 +13,9 @@ actor SyncEngine {
 
     private let pull: PullStrategy
     private let push: PushQueue
+    /// 正在跑的 runOnce Task。重入调用（比如 scenePhase 连续切换、下拉刷新期间又被唤起）
+    /// 直接 await 同一个 Task，避免多份全量拉取同时把两个库反序列化到内存里。
+    private var inFlight: Task<Summary, Error>?
 
     init(pull: PullStrategy, push: PushQueue) {
         self.pull = pull
@@ -20,10 +23,18 @@ actor SyncEngine {
     }
 
     func runOnce() async throws -> Summary {
-        _ = try await pull.runFullPull()
-        let pushSummary = try await push.run()
-        let pullSummary = try await pull.runFullPull()
-        return Summary(push: pushSummary, pull: pullSummary)
+        if let inFlight {
+            return try await inFlight.value
+        }
+        let task = Task<Summary, Error> { [pull, push] in
+            _ = try await pull.runFullPull()
+            let pushSummary = try await push.run()
+            let pullSummary = try await pull.runFullPull()
+            return Summary(push: pushSummary, pull: pullSummary)
+        }
+        inFlight = task
+        defer { inFlight = nil }
+        return try await task.value
     }
 
     /// 仅推送（比如 stop 计时后立刻触发），不拉取，失败静默。

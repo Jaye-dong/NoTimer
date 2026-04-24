@@ -170,6 +170,16 @@ actor NotionClient {
         }
     }
 
+    /// 归档（软删除）一个 page。Notion 没有硬删除的公开 API — `archived=true` 让页面在
+    /// 数据库视图里消失，但文档仍然存在。
+    func archivePage(pageId: String) async throws {
+        let body: [String: Any] = ["archived": true]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let req = try request(method: "PATCH", path: "/v1/pages/\(pageId)", body: data)
+        let (responseData, response) = try await perform(req)
+        try validate(response: response, data: responseData)
+    }
+
     // MARK: - Internal
 
     private func request(method: String, path: String, body: Data? = nil) throws -> URLRequest {

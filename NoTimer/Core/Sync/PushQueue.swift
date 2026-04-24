@@ -54,6 +54,24 @@ actor PushQueue {
                 }
             }
         }
+
+        // 处理 tombstone：有 pageId 就 PATCH archived=true，然后本地物理删除。
+        let tombstones = try timeRecords.tombstoned()
+        for record in tombstones {
+            do {
+                if let pageId = record.notionPageId {
+                    try await client.archivePage(pageId: pageId)
+                }
+                try timeRecords.purge(id: record.id)
+                summary.pushed += 1
+            } catch {
+                summary.failed += 1
+                if summary.firstError == nil {
+                    summary.firstError = error.localizedDescription
+                }
+            }
+        }
+
         return summary
     }
 

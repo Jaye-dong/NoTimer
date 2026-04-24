@@ -60,6 +60,37 @@ struct TimeRecordRepository: Sendable {
         }
     }
 
+    func tombstoned() throws -> [TimeRecord] {
+        try database.writer.read { db in
+            try TimeRecord
+                .filter(TimeRecord.Columns.syncState == SyncState.tombstone.rawValue)
+                .fetchAll(db)
+        }
+    }
+
+    /// 逻辑删除：有 Notion page 的置 tombstone，等 PushQueue 归档并物理删除；
+    /// 本地新建从没同步过的直接物理删除。
+    func delete(id: String) throws {
+        try database.writer.write { db in
+            guard let record = try TimeRecord.fetchOne(db, key: id) else { return }
+            if record.notionPageId != nil {
+                var marked = record
+                marked.syncState = .tombstone
+                marked.localUpdatedAt = Date()
+                try marked.update(db)
+            } else {
+                _ = try TimeRecord.deleteOne(db, key: id)
+            }
+        }
+    }
+
+    /// Push 成功归档后从本地物理删除。
+    func purge(id: String) throws {
+        try database.writer.write { db in
+            _ = try TimeRecord.deleteOne(db, key: id)
+        }
+    }
+
     func conflictCount() throws -> Int {
         try database.writer.read { db in
             try TimeRecord
@@ -89,10 +120,11 @@ struct TimeRecordRepository: Sendable {
     }
 
     /// 从 Notion 拉回的数据覆盖本地；如本地处于 pendingPush / conflict 状态则不覆盖，
-    /// 而是升级为 conflict 交由用户解决。
+    /// 而是升级为 conflict 交由用户解决。tombstone 状态保留不动 —— 下一次 push 会归档。
     func applyPulled(_ record: TimeRecord, existing: TimeRecord?) throws {
         try database.writer.write { db in
             if let existing {
+                if existing.syncState == .tombstone { return }
                 if existing.syncState == .pendingPush || existing.syncState == .conflict {
                     var marked = existing
                     marked.syncState = .conflict
